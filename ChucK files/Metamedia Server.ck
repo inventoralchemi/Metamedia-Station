@@ -8,7 +8,8 @@
 
 
 // global variables
-7777 => int portBase;
+5000 => int xmitPortBase;
+xmitPortBase + 1000 => int recvPortBase;
 "208.52.185.228" => string hostname;
 "127.0.0.0" => string myIP;
 "unconfigured user" => string name;
@@ -26,10 +27,10 @@ class RECV
 {
     // create our OSC receivers and start listening
     OscRecv recvMessageStart;
-    portBase => recvMessageStart.port;
+    recvPortBase => recvMessageStart.port;
     recvMessageStart.listen();
     OscRecv recvMessageText;
-    portBase + 1 => recvMessageText.port;
+    recvPortBase + 1 => recvMessageText.port;
     recvMessageText.listen();
     
     // define messages8
@@ -79,11 +80,11 @@ class XMIT
 {
     // send object and aim transmitter
     OscSend xmitMessageStart;
-    xmitMessageStart.setHost( hostname, portBase );
+    xmitMessageStart.setHost( hostname, xmitPortBase );
     OscSend xmitMessageText;
-    xmitMessageText.setHost( hostname, portBase + 1 );
+    xmitMessageText.setHost( hostname, xmitPortBase + 1 );
     
-    // infinite time loop
+    // transmit text verification response
     fun void xmitText(string ip, string name, string command, string msg)
     {
         // send the command the message
