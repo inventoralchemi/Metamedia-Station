@@ -20,22 +20,37 @@ xmitPortBase + 1000 => int recvPortBase;
 // class instantiations
 RECV recv;
 XMIT xmit;
+SYNTH synth;
 
 
 // receive class
 class RECV
 {
+    // define global variables
+    "/metastation/messages" => string metastationOSCpath;
+    0.0 => float amplitude;
+    220.0 => float frequency;
+    0.0 => float phase;
+    
     // create our OSC receivers and start listening
     OscRecv recvMessageStart;
     recvPortBase => recvMessageStart.port;
     recvMessageStart.listen();
-    OscRecv recvMessageText;
-    recvPortBase + 1 => recvMessageText.port;
-    recvMessageText.listen();
+    OscRecv recvMessageInt;
+    recvPortBase + 1 => recvMessageInt.port;
+    recvMessageInt.listen();
+    OscRecv recvMessageFloat;
+    recvPortBase + 2 => recvMessageFloat.port;
+    recvMessageFloat.listen();
+    OscRecv recvMessageString;
+    recvPortBase + 3 => recvMessageString.port;
+    recvMessageString.listen();
     
-    // define messages8
-    recvMessageStart.event( "/metastation/messages, s s s" ) @=> OscEvent @ oe;
-    recvMessageText.event( "/metastation/messages, s" ) @=> OscEvent @ text;
+    // define message events
+    recvMessageStart.event( metastationOSCpath + ", s s s" ) @=> OscEvent @ oe;
+    recvMessageInt.event( metastationOSCpath + ", i" ) @=> OscEvent @ ie;
+    recvMessageFloat.event( metastationOSCpath + ", f" ) @=> OscEvent @ fe;
+    recvMessageString.event( metastationOSCpath + ", s" ) @=> OscEvent @ se;
     
     
     // infinite event loop
@@ -45,6 +60,7 @@ class RECV
         {
             // wait for event to arrive
             oe => now;
+            // <<<"server oe event occurred", "">>>;
             
             // grab the next message from the queue. 
             while( oe.nextMsg() )
@@ -60,13 +76,27 @@ class RECV
                 // do different things depending on the message
                 if (command == "print")
                 {
-                    text => now;
-                    while( text.nextMsg() )
-                    {
-                        text.getString() => string msg;
-                        <<<ip, name, command, msg>>>;
-                        xmit.xmitText(ip, name, "verify " + command, msg);
-                    }
+                    // <<<"print command recognized", "">>>;
+                    se => now;
+                    se.nextMsg();
+                    se.getString() => string msg;
+                    <<<ip, name, command, msg>>>;
+                    xmit.xmitText(ip, name, "verify " + command, msg);
+                    <<<"print response sent", "">>>;
+                }
+                else if (command == "vco")
+                {
+                    // <<<"vco command recognized", "">>>;
+                    fe => now;
+                    fe.nextMsg();
+                    fe.getFloat() => amplitude;
+                    fe => now;
+                    fe.nextMsg();
+                    fe.getFloat() => frequency;
+                    fe => now;
+                    fe.nextMsg();
+                    fe.getFloat() => phase;
+                    synth.setVCO( amplitude, frequency, phase );
                 }
             }
         }
@@ -78,24 +108,80 @@ class RECV
 // transmit class
 class XMIT
 {
+    // define global variables
+    "/metastation/messages" => string metastationOSCpath;
+    
     // send object and aim transmitter
     OscSend xmitMessageStart;
     xmitMessageStart.setHost( hostname, xmitPortBase );
-    OscSend xmitMessageText;
-    xmitMessageText.setHost( hostname, xmitPortBase + 1 );
+    OscSend xmitMessageInt;
+    xmitMessageInt.setHost( hostname, xmitPortBase + 1 );
+    OscSend xmitMessageFloat;
+    xmitMessageFloat.setHost( hostname, xmitPortBase + 2 );
+    OscSend xmitMessageString;
+    xmitMessageString.setHost( hostname, xmitPortBase + 3 );
     
     // transmit text verification response
     fun void xmitText(string ip, string name, string command, string msg)
     {
         // send the command the message
-        xmitMessageStart.startMsg( "/metastation/messages", "s s s" );
+        xmitMessage(myIP, name, command);
+        
+        // send the data message
+        xmitString(msg);
+    }
+    
+    // send a command message
+    fun void xmitMessage(string myIP, string name, string command)
+    {
+        xmitMessageStart.startMsg( metastationOSCpath, "s s s" );
         myIP => xmitMessageStart.addString;
         name => xmitMessageStart.addString;
         command => xmitMessageStart.addString;
-        
-        // send the data message
-        xmitMessageText.startMsg( "/metastation/messages", "s" );
-        msg => xmitMessageText.addString;
+    }
+    
+    
+    // send an integer data message
+    fun void xmitInt(int num)
+    {          
+        xmitMessageInt.startMsg( metastationOSCpath, "i" );
+        num => xmitMessageInt.addInt;
+    }
+    
+    
+    // send a floating point data message
+    fun void xmitFloat(float num)
+    {          
+        xmitMessageFloat.startMsg( metastationOSCpath, "f" );
+        num => xmitMessageFloat.addFloat;
+    }
+    
+    
+    // send a text data message
+    fun void xmitString(string msg)
+    {          
+        xmitMessageString.startMsg( metastationOSCpath, "s" );
+        msg => xmitMessageString.addString;
+    }
+}
+
+
+
+// Synthesizer class
+class SYNTH
+{
+    // define  the patch
+    SinOsc vco => Gain volume => dac;
+    
+    // initialize the patch
+    setVCO(0.0, 220.0, 0.0);
+    
+    // set the vco controls
+    fun void setVCO( float amplitude, float frequency, float phase )
+    {
+        amplitude => vco.gain;
+        frequency => vco.freq;
+        phase => vco.phase;
     }
 }
 
