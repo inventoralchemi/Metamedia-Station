@@ -171,17 +171,25 @@ class XMIT
 class SYNTH
 {
     // define  the patch
-    SinOsc vco => Gain volume => dac;
+    SinOsc vco => ADSR adsr => Gain volume => dac;
     
     // initialize the patch
+    10::ms => dur A;
+    10::ms => dur D;
+    0.8 => float S;
+    40::ms => dur R;
+    adsr.set(A, D, S, R);
     setVCO(0.0, 220.0, 0.0);
     
     // set the vco controls
     fun void setVCO( float amplitude, float frequency, float phase )
     {
+        adsr.keyOff(1);
+        R => now;
         amplitude => vco.gain;
         frequency => vco.freq;
         phase => vco.phase;
+        adsr.keyOn(1);
     }
 }
 

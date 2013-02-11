@@ -19,9 +19,11 @@ recvPortBase + 1000 => int xmitPortBase;
 
 
 // class instantiations
+BLASTER blaster;
+BS bs;
 RECV recv;
 XMIT xmit;
-BLASTER blaster;
+
 
 // receive class
 class RECV
@@ -103,6 +105,9 @@ class XMIT
     OscSend xmitMessageString;
     xmitMessageString.setHost( hostname, xmitPortBase + 3 );
     
+    // run boolean sequencer
+    spork ~ bs.seq();
+
     // infinite time loop
     fun void loop()
     {
@@ -122,7 +127,7 @@ class XMIT
             29::second => now;
         }
     }
-    spork ~ loop();
+    // spork ~ loop();
     
     // send a command message
     fun void xmitMessage(string myIP, string name, string command)
@@ -168,11 +173,11 @@ class BLASTER
     fun void beeooo()
     {
         // define variables
-        1.0 / 12.0 => float tStep;
-        1.0 => float tau;
-        3.0 * tau => float tMax;
-        0.2 => float r;
-        0.333 => float amplitude;
+        1.0 / 16.0 => float tStep;
+        5.0 => float tMax;
+        tMax / 4.0 => float tau;
+        0.1 => float r;
+        1.0 => float amplitude;
         220.0 => float frequency;
         0.0 => float phase;
         
@@ -180,9 +185,8 @@ class BLASTER
         for ( 0.0 => float t; t <= tMax; tStep +=> t )
         {
             // do frequency calculations
-            0.25 + 0.25 * riseAndFall(t, tau) => amplitude;
-            1.25 + riseAndFall(t, tau) * Math.random2f(-r, r) => float freqFrac;
-            Math.round(50.0 * freqFrac) => float midiNumber;
+            0.2 + 1.2 * riseAndFall(t, tau) + Math.random2f(0, r) => float freqFrac;
+            Math.round(127.0 * freqFrac) => float midiNumber;
             if (midiNumber < 0)
                 0.0 => midiNumber;
             else if (midiNumber > 127)
@@ -214,7 +218,66 @@ class BLASTER
         if (t == 0.0)
             return 0.0;  // prevent divide by zero error
         else
-            return Math.exp(-t / tau);  // send e^-x/x value
+            return (t / tau) * Math.exp(-t / tau);  // send e^-x/x value
+    }
+}
+
+
+
+// boolean sequencer class
+class BS
+{
+    // this is the bs
+    fun void seq()
+    {
+        // define variables
+        1.0 / 8.0 => float tStep;
+        1.0 => float amplitude;
+        220.0 => float frequency;
+        0.0 => float phase;
+        12 => int numBits;
+        Math.pow(2.0, numBits) $ int => int maxCount;
+        0 => int count;
+        0.0 => float cv;
+        
+        while( true )
+        {
+            // apply logic
+            0 => float sum;
+            4 => int numInputs;
+            (numBits / numInputs) => int skip;
+            for (0 => int b; b < skip; 1 +=> b)
+            {
+                0 => int logic;
+                for (0 => int i; i < numInputs; ++i)
+                {
+                    ( (count >> (b + i * skip) ) & 1) ^ logic => logic;
+                }
+                logic +=> sum;
+            }
+            
+            // aggregation network
+            cv => float cvPrev;
+            sum / skip => cv;
+            
+            // calculate frequency
+            220.0 * cv => frequency;
+            
+            // send vco control message
+            if( cv != cvPrev )
+            {
+                xmit.xmitMessage(myIP, name, "vco");
+                xmit.xmitFloat(amplitude);
+                xmit.xmitFloat(frequency);
+                xmit.xmitFloat(phase);            
+            }
+        
+            // increment counter
+            (count + 1) % maxCount => count;
+            
+            // advance time
+            tStep::second => now;            
+        }
     }
 }
 
